@@ -203,16 +203,90 @@ void move()
 	draw(); // перерисовываем
 }
 
+/*
+int ALU(int command, int operand){
 
-int ALU(int command, int operand)
-{
-	switch(command){
-		case 2*0x40: iC = operand; draw(); break;
-		case 2*0x41: if(t1 < 0){ iC = operand; draw(); } break;
-		case 2*0x42: if(t1 == 0){ iC = operand; draw(); } break;
-		case 2*0x43: raise(SIGUSR1); break;
+	int t;
+	int i, value = 0;
+
+	switch(command)
+	{
+
+		case ADD:
+			sc_memoryGet(operand-1,&value);
+			if (AKKUM + value <= 0x7FFF)
+				AKKUM += value;
+			else sc_regSet(S,1);
+
+		break;
+
+		case SUB:
+
+			sc_memoryGet(operand - 1, &value);
+
+			if (AKKUM - value <= 0x7FFF)
+
+				AKKUM-=value;
+
+			else sc_regSet(S,1);
+
+		break;
+
+		case DIVIDE:
+
+			sc_memoryGet(operand - 1, &value);
+
+			if (value == 0) setFlag(O);
+
+			if (AKKUM/value<=0x7FFF) AKKUM/=value;
+
+		break;
+
+		case MUL:
+
+			sc_memoryGet(operand-1,&value);
+
+			if (AKKUM * value <= 0x7FFF) AKKUM*=value;
+				else sc_regSet(P,1);
+
+		break;
+
+		case(CHL):
+
+			sc_memoryGet(operand, &t);
+			AKKUM = t<<1;
+		break;
+
+		case(SHR):
+			sc_memoryGet(operand, &t);
+			AKKUM = t>>1;
+		break;
+
+		case(RCL):
+			sc_memoryGet(operand, &t);
+			if( t >> 14 & 0x1)AKKUM = t>>1|0x4000;
+				else AKKUM = t>>1;
+
+		break;
+
+		case(RCR):
+
+			sc_memoryGet(operand, &t);
+
+			if( t & 0x1) AKKUM = t<<1|0x4000;
+				else AKKUM = t<<1;
+
+		break;
+
+			case(NEG):
+			sc_memoryGet(operand, &t);
+
+		break;
+
 	}
+	return 0;
 }
+*/
 
 int main()
 { 

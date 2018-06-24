@@ -1,26 +1,67 @@
 #include "sat.h"
 
-//int sc_memory[100]; // массив памяти
+int READ,ACC,iC=0;
 
-int str2sc_word(char *str, int *value)
+
+int ALU(int command, int addr, int *operand)
 {
-	int pos = 0, plus = 1;
-	int n;
-	int byte1, byte2;
+	int val;
+	switch(command)
+	{
+		case 0x10://READ
+			
+			sc_memoryGet(iC,&READ);
 
-	if (str[0] == '+') {
-		plus = 0;
-		pos = 1;
+		break;
+
+		case 0x11://WRITE
+
+			sc_memoryGet(operand[addr],&val);
+			sc_memorySet(iC,val);
+			iC++;
+
+		break;
+
+		case 0x20://LOAD
+			sc_memoryGet(operand[addr],&ACC);
+		
+		break;
+
+		case 0x21://STORE
+			sc_memorySet(operand[addr],ACC);
+			iC++;
+		break;
+
+		case 0x30://ADD
+			sc_memoryGet(operand[addr],&val);
+			ACC+=val;
+			
+		break;
+
+		case 0x31://SUB
+			sc_memoryGet(operand[addr],&val);
+			ACC-=val;
+		break;
+
+		case 0x32://DIVIDE
+			sc_memoryGet(operand[addr],&val);
+			ACC/=val;
+		break;
+
+		case 0x33://MUL
+			sc_memoryGet(operand[addr],&val);
+			ACC*=val;
+		break;
+
+		case 0x57://JNC
+			if (ACC<=0x9999)iC=operand[addr];
+		break;
+
+		break;
 	}
-	if (sscanf(str + pos, "%x", &n) != 1)
-		return -1;
-	byte1 = n & 0xFF;
-	byte2 = n >> 8;
-	if ((byte1 > 0x7F) || (byte2 > 0x7F))
-		return -1;
-	*value = byte1 | (byte2 << 7) | (plus << 14);
 	return 0;
 }
+
 
 int str2command(char *str)
 {
@@ -42,23 +83,17 @@ int str2command(char *str)
 		ret = 0x32;
 	else if (strcmp(str, "MUL") == 0)
 		ret = 0x33;
-	else if (strcmp(str, "JUMP") == 0)
-		ret = 0x40;
-	else if (strcmp(str, "JNEG") == 0)
-		ret = 0x41;
-	else if (strcmp(str, "JZ") == 0)
-		ret = 0x42;
 	else if (strcmp(str, "HALT") == 0)
 		ret = 0x43;
-	else if (strcmp(str, "JNP") == 0)
-		ret = 0x59;
+	else if (strcmp(str, "JNC") == 0)
+		ret = 0x57;
 	else
 		ret = -1;
 	
 	return ret;
 }
 
-int pars_line(char *str, int *addr, int *value)
+int pars_line(char *str, int *addr, int *value,int *add_mem,int *cmd_mem)
 {
 	char *ptr;
 	int operand, command;
@@ -67,13 +102,9 @@ int pars_line(char *str, int *addr, int *value)
 	ptr = strchr(str, ';');
 	if (ptr != NULL)  *ptr = '\0';
 	ptr = strchr(str, '\n');
-
 	if (ptr != NULL) *ptr = '\0';
-
 	ptr = strtok(str, " \t");
-
 	if (ptr == NULL) return EMPTY_STR;
-
 	if (sscanf(ptr, "%d", addr) != 1)
 	{
 		return ERR_ARG1;
@@ -82,34 +113,39 @@ int pars_line(char *str, int *addr, int *value)
 	if ((*addr < 0) || (*addr >= 100)) return ERR_ARG1;
 
 	ptr = strtok(NULL, " \t");
+	//printf("%s\n",ptr);  //CMD
 
 	if (ptr == NULL) return ERR_FEW;
 	else
 		if (strcmp(ptr, "=") == 0)
 		{
+			//printf("f");
+			cmd_mem[*addr]=0x0;
 			flag_assign = 1;
 		}
-	else
-	{
-		command = str2command(ptr);
-		if (command == -1)
-			return ERR_ARG2;
-	}
+		else
+		{
+			command = str2command(ptr);
+			cmd_mem[*addr]=command;//cmd
+			if (command == -1)
+				return ERR_ARG2;
+		}
+
 
 	ptr = strtok(NULL, " \t");
+	if (!flag_assign)
+	{
+		sscanf(ptr, "%d", &add_mem[*addr]);
+	}
+	else
+	{
+		sscanf(ptr+1, "%x", &add_mem[*addr]);
+	}
 
 	if (ptr == NULL)return ERR_FEW;
-
 	ptr = strtok(NULL, " \t");
 
 	if (ptr != NULL)return ERR_MANY;
-
-	if (!flag_assign)
-	{
-		printf("%d %d\n",command, operand);
-		sc_commandEncode(command, operand, value);
-		
-	}
 	
 	return 0;
 }
@@ -123,10 +159,6 @@ void print_error(char *line, int line_cnt, int err)
 		
 		case ERR_ARG2:
 			fprintf(stderr, "%d: unknown command\n", line_cnt);
-			break;
-		
-		case ERR_ARG3:
-			fprintf(stderr, "%d: third argument isn't a number\n", line_cnt);
 			break;
 		
 		case ERR_FEW:
@@ -155,12 +187,12 @@ int test_argv(char *argv[])
 int main(int argc, char *argv[])
 {
 
-    sc_memoryLoad("save.o");
+    sc_memoryLoad(argv[1]);
     
 	char buf[256], line[256];
-	char add_mem[100];
+	int add_mem[100],cmd_mem[100];
 	FILE *input;
-	int value, addr, line_cnt = 1;
+	int value, command, operand, addr, line_cnt = 1;
 	int err;
 	int flag_err = 0;
 	
@@ -178,27 +210,15 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 	
-	//memset(add_mem, 0, 100);
-	//memset(sc_memory, 0, 100 * sizeof(int));
-    //sc_memorySet(add_mem,100);
-    //sc_memorySet(sc_memory,100 * sizeof(int));
 	while (fgets(line, 256, input)) {
 		strcpy(buf, line);
-		err = pars_line(buf, &addr, &value);
+		err = pars_line(buf, &addr, &value, &add_mem, &cmd_mem);
 		if (err == 0) {
-			if (add_mem[addr] == 0) {
-			    //sc_memory[addr] = value;
-			//	int val2;
-			//	sc_memoryGet(addr,&val2);
-			//	printf("pred %d %d\n",addr,val2);
-                sc_memorySet(addr,9999);
-			//	sc_memoryGet(addr,&val2);
-			//	printf("post %d %d\n",addr,val2);
+
+			if (cmd_mem[addr] == 0) {
+				sc_memorySet(addr,add_mem[addr]);
 			}
-			else {
-				fprintf(stderr, "%d: Command with %d address already exists\n%s",  line_cnt, addr, line);
-				flag_err = 1;	
-			}
+
 		}
 		else if (err < 0) {
 			print_error(line, line_cnt, err);
@@ -206,9 +226,15 @@ int main(int argc, char *argv[])
 		}
 		line_cnt++;
 	}
+
+	for(int i=1;i<=addr;i++)
+	{
+		ALU(cmd_mem[i], i, add_mem);
+	}
+
 	if (flag_err == 0)
 	{
-		sc_memorySave("save.o");
+		sc_memorySave(argv[1]);
 	}
 	fclose(input);
 	return 0;
